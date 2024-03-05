@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>List HDFS</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        .download-btn {
+            display: block;
+            width: 100%;
+            padding: 0.375rem 2.5rem;
+            text-align: center; /* Horizontal alignment of button */
+            line-height: normal; /* Reset line height to ensure text is vertically centered */
+            vertical-align: middle; /* Vertical alignment of button */
+        }
+        .hdfs-list {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .hdfs-list form {
+            display: flex;
+            align-items: center;
+            width: 70%; /* Adjust width of the form */
+        }
+
+        .hdfs-list input[type="file"] {
+            flex: 1; /* Make file input expand to fill remaining space */
+        }
+
+        .btn-primary {
+            width: 30%; /* Adjust width of the button */
+        }
+
+        .hdfs-list input[type="text"] {
+            width: 70%; /* Adjust width of the input */
+            margin-right: 10px; /* Add some margin between input and button */
+            box-sizing: border-box;
+        }
+
+        .hdfs-list .search-btn {
+            width: 30%; /* Adjust width of the button */
+        }
+
+        table {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="hdfs-list">
+        <h2>List HDFS</h2>
+        <form id="uploadForm">
+            <input type="file" class="form-control-file" id="file" name="file">
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+    </div>
+    <div class="hdfs-list">
+        <input type="text" id="search-box" value="/" placeholder="Search..." class="form-control">
+        <button class="btn btn-success search-btn">Find</button>
+    </div>
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th>Tên</th>
+            <th>Đường dẫn</th>
+            <th>Thư mục</th>
+            <th>Thời gian sửa đổi</th>
+            <th>Kích thước</th>
+            <th>Hoạt động</th>
+        </tr>
+        </thead>
+        <tbody id="list-data">
+        <!-- Dữ liệu danh sách sẽ được tạo động thông qua JavaScript -->
+        <!-- Thầy Phong dạy trong môn NETCORE MVC -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+
+    function loadFilesByPath(path) {
+        $.ajax({
+            url: '/hdfs/findByPath',
+            type: 'GET',
+            data: {
+                path: path
+            },
+            dataType: 'json',
+            success: function (data) {
+                var tableBody = $('#list-data');
+                tableBody.empty();
+                $.each(data, function (index, item) {
+                    var row = '<tr>';
+                    row += '<td>' + item.name + '</td>';
+                    if (item.Directory === "true") {
+                        row += '<td><a href="#" class="directory-link">' + item.Path + '</a></td>';
+                    } else {
+                        row += '<td>' + item.Path + '</td>';
+                    }
+                    row += '<td>' + item.Directory + '</td>';
+                    row += '<td>' + item.ModificationTime + '</td>';
+                    row += '<td>' + item.Len + '</td>';
+                    row += '<td>';
+                    row += '<button class="btn btn-danger delete-btn" data-index="' + index + '">Delete</button>';
+                    row += '<td><button class="btn btn-primary download-btn ml-2 d-flex justify-content-center" data-path="' + item.Path + '">Download</button></td>';
+                    row += '</td>';
+                    row += '</tr>';
+                    tableBody.append(row);
+                });
+            },
+            error: function (error) {
+                console.log('Error:', error);
+            }
+        });
+    }
+
+    $(document).ready(function () {
+        loadFilesByPath("/");
+    });
+
+    $('.search-btn').click(function () {
+        var searchPath = $('#search-box').val();
+        loadFilesByPath(searchPath);
+    });
+
+    $("#uploadForm").on("submit", function (event) {
+        event.preventDefault();
+
+        var formData = new FormData(this);
+
+        $.ajax({
+            url: "/hdfs/uploadFile",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                var result = JSON.parse(response).result;
+                if (result === "success") {
+                    alert("Upload Success！");
+                    loadFilesByPath("/");
+                } else {
+                    alert("Upload Fail！");
+                }
+            },
+            error: function () {
+                alert("Upload Fail！");
+            }
+        });
+    });
+
+    $('#list-data').on('click', '.delete-btn', function () {
+        var path = $(this).closest('tr').find('.directory-link').text() || $(this).closest('tr').find('td:eq(1)').text();
+
+        $.ajax({
+            url: '/hdfs/deleteFile',
+            type: 'POST',
+            data: { path: path }, // Send path as a request parameter
+            success: function () {
+                loadFilesByPath("/");
+            },
+            error: function () {
+                alert("Delete Fail！");
+            }
+        });
+    });
+
+    $('#list-data').on('click', '.download-btn', function () {
+        var path = $(this).data('path');
+
+        // Send an AJAX request to download the file
+        $.ajax({
+            url: '/hdfs/downloadFile',
+            type: 'GET',
+            data: {
+                path: path
+            },
+            xhrFields: {
+                responseType: 'blob' // Set the response type to blob
+            },
+            success: function (data) {
+                // Create a temporary anchor element
+                var a = document.createElement('a');
+                var url = window.URL.createObjectURL(data);
+
+                // Set the anchor's href attribute to the object URL
+                a.href = url;
+
+                // Set the anchor's download attribute with the file name
+                a.download = path.split('/').pop();
+
+                // Append the anchor to the document body and click it to trigger the download
+                document.body.appendChild(a);
+                a.click();
+
+                // Remove the anchor from the document body and revoke the object URL to release memory
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            },
+            error: function () {
+                alert("Download Fail！");
+            }
+        });
+    });
+
+</script>
+</body>
+</html>
